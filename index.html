@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Quêtes Atria</title>
+		<style>
+			@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&family=Roboto&display=swap');
+
+			@keyframes appears { from { opacity: 0; transform:  translateY(-30px); } }
+			body { background: #EDEDED; font-family: Roboto; text-align: center; user-select: none; }
+			#score { font-size: 48px; padding: 12px 24px; }
+			#score::before { content: 'Score : ' }
+			#quests { height: 100px; font-size: 42px; display: flex; margin: 0 20px; grid-gap: 20px; font-family: Noto Color Emoji; align-items: center; justify-content: center }
+			#quests .quest { background: #FFFFFF; padding: 18px 24px; border-radius: 10px; transition: all .3s; cursor: pointer; animation: appears .5s; }
+			#quests .quest:hover { background: #FFFFFF; transform: translateY(-5px); box-shadow: 0 5px 7px #00000033 }
+			#quests .quest:active { transform: translateY(0); box-shadow: none; }
+			#quests .quest.done { pointer-events: none; background: transparent; color: transparent; position: relative; }
+			#quests .quest.done::before { content: 'Aucune quête disponible'; position: absolute; top: 50%; left: 50%; translate: -50% -50%; font-size: 24px; color: #999999; font-family: Roboto; }
+			#buttons { padding: 24px; }
+			button { font-family: Roboto; font-size: 16px; padding: 12px 24px; border: 0; background: #DADADA; transition: all .3s; cursor: pointer; border-radius: 10px; }
+			button:hover { background: #CACACA; }
+		</style>
+	</head>
+	<body>
+		<div id="score">0</div>
+		<div id="quests"></div>
+		<div id="buttons">
+			<button onClick="start()">Nouvelle partie</button>
+		</div>
+
+
+		<script>
+			const SYMBOLS = ['🌊','🌞','⛰️','🍂']
+			const NB_SYMBOLS = 4;
+			const SEQUENCE_SIZE = 6;
+			const NB_PARALLEL_QUESTS = 4;
+			// v2.1
+			const IMPORTED_QUESTS = `314222
+123343
+234211
+123313
+333144
+311223
+424224
+322242
+234414
+441113
+122413
+241141
+412411
+233433
+444242
+221412
+122332
+314443
+113113
+311123
+432144
+441333
+124123
+243342`;
+
+			const used_symbols = SYMBOLS.slice(0, NB_SYMBOLS);
+			let quests = [];
+			let questsDone = [];
+
+			const $quests = document.querySelector('#quests');
+			const $score = document.querySelector('#score');
+
+// Imports ///////////////////////////////////////
+
+const shuffleArray = array => {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = array[i];
+    array[i] = array[j];
+    array[j] = temp;
+  }
+
+  return array;
+}
+
+function weightedRandom(items, weights) {
+  if (items.length !== weights.length) {
+    throw new Error('Items and weights must be of the same size');
+  }
+
+  if (!items.length) {
+    throw new Error('Items must not be empty');
+  }
+
+  // Preparing the cumulative weights array.
+  // For example:
+  // - weights = [1, 4, 3]
+  // - cumulativeWeights = [1, 5, 8]
+  const cumulativeWeights = [];
+  for (let i = 0; i < weights.length; i += 1) {
+    cumulativeWeights[i] = weights[i] + (cumulativeWeights[i - 1] || 0);
+  }
+
+  // Getting the random number in a range of [0...sum(weights)]
+  // For example:
+  // - weights = [1, 4, 3]
+  // - maxCumulativeWeight = 8
+  // - range for the random number is [0...8]
+  const maxCumulativeWeight = cumulativeWeights[cumulativeWeights.length - 1];
+  const randomNumber = maxCumulativeWeight * Math.random();
+
+  // Picking the random item based on its weight.
+  // The items with higher weight will be picked more often.
+  for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+    if (cumulativeWeights[itemIndex] >= randomNumber) {
+      return {
+        item: items[itemIndex],
+        index: itemIndex,
+      };
+    }
+  }
+}
+
+/////////////////////////////////////////////////
+
+			function generateQuests({count, symbols, sequenceSize}) {
+				const quests = new Set();
+				let weights = symbols.map(() => 1);
+				do {
+					const tempWeights = [...weights];
+					const quest = Array.from(Array(sequenceSize), () => {
+						const {item: chosenSymbol, index} = weightedRandom(symbols, weights);
+						tempWeights[index]-=1/(count*sequenceSize/symbols.length);
+						return chosenSymbol;
+					}).join('');
+
+					if(!quests.has(quest)) {
+						weights = tempWeights;
+						quests.add(quest);
+					}
+
+				} while(quests.size < count);
+				
+				return quests;
+			}
+
+			function displayQuest(quest, replace) {
+				const $quest = document.createElement('div');
+				$quest.classList.add('quest');
+				$quest.innerText = quest || [...new Array(SEQUENCE_SIZE)].map(() => SYMBOLS[0]).join('');
+				if(quest)
+					$quest.addEventListener('click', function() {
+						questsDone.push(quest);
+						$score.innerText = questsDone.length;
+						displayQuest(quests.pop(), this);
+					});
+				else $quest.classList.add('done');
+
+				if(replace) 
+					$quests.replaceChild($quest, replace);
+				else
+					$quests.appendChild($quest);
+			}
+
+			function start() {
+				$quests.innerText = '';
+				$score.innerText = 0;
+				if(IMPORTED_QUESTS)
+					quests = shuffleArray(IMPORTED_QUESTS.split('\n').map(x => x.replaceAll('1', SYMBOLS[0]).replaceAll('2', SYMBOLS[1]).replaceAll('3', SYMBOLS[2]).replaceAll('4', SYMBOLS[3])));
+				else
+					quests = [...generateQuests({count: 100, symbols: used_symbols, sequenceSize: SEQUENCE_SIZE})];
+				
+
+				for(let i = 0; i< NB_PARALLEL_QUESTS; i++) {
+					displayQuest(quests.pop());
+				}
+			}
+		</script>
+	</body>
+</html>
